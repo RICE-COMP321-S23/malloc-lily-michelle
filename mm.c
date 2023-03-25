@@ -27,20 +27,27 @@
  ********************************************************/
 team_t team = {
 	/* Team name */
-	"",
+	"Machine Learning",
 	/* First member's full name */
-	"",
+	"Michelle Pang",
 	/* First member's NetID */
-	"",
+	"yp29",
 	/* Second member's full name (leave blank if none) */
-	"",
+	"Lily Gao",
 	/* Second member's NetID (leave blank if none) */
-	""
+	"qg8"
 };
 
+/* Explicit free list, circular doubly linked list*/
+struct seg_list
+{
+	struct seg_list *next; /* Pointer to next block */
+	struct seg_list *prev; /* Pointer to previous block */
+};
 /* Basic constants and macros: */
 #define WSIZE      sizeof(void *) /* Word and header/footer size (bytes) */
 #define DSIZE      (2 * WSIZE)    /* Doubleword size (bytes) */
+#define ALIGN_SIZE 8		 /* Alignment size */
 #define CHUNKSIZE  (1 << 12)      /* Extend heap by this amount (bytes) */
 
 #define MAX(x, y)  ((x) > (y) ? (x) : (y))  
@@ -53,7 +60,7 @@ team_t team = {
 #define PUT(p, val)  (*(uintptr_t *)(p) = (val))
 
 /* Read the size and allocated fields from address p. */
-#define GET_SIZE(p)   (GET(p) & ~(DSIZE - 1))
+#define GET_SIZE(p)   (GET(p) & ~(ALIGN_SIZE - 1))
 #define GET_ALLOC(p)  (GET(p) & 0x1)
 
 /* Given block ptr bp, compute address of its header and footer. */
@@ -73,10 +80,14 @@ static void *extend_heap(size_t words);
 static void *find_fit(size_t asize);
 static void place(void *bp, size_t asize);
 
+/* Pointer to first free element of each free list*/
+static struct seg_list *free_listp;
 /* Function prototypes for heap consistency checker routines: */
 static void checkblock(void *bp);
 static void checkheap(bool verbose);
 static void printblock(void *bp); 
+unsigned int MAX_SIZE;
+static void init_head(struct seg_list *dummy);
 
 /* 
  * Requires:
@@ -86,21 +97,33 @@ static void printblock(void *bp);
  *   Initialize the memory manager.  Returns 0 if the memory manager was
  *   successfully initialized and -1 otherwise.
  */
-int
+int 
 mm_init(void) 
 {
-
-	/* Create the initial empty heap. */
-	if ((heap_listp = mem_sbrk(4 * WSIZE)) == (void *)-1)
+	/* Initialize array size. */
+	MAX_SIZE = 15;
+	/* Create the initial empty array. */
+	size_t seg_size = sizeof(struct seg_list);
+	if ((free_listp = mem_sbrk(MAX_SIZE * seg_size)) == (void *)-1)
 		return (-1);
-	PUT(heap_listp, 0);                            /* Alignment padding */
-	PUT(heap_listp + (1 * WSIZE), PACK(DSIZE, 1)); /* Prologue header */ 
-	PUT(heap_listp + (2 * WSIZE), PACK(DSIZE, 1)); /* Prologue footer */ 
-	PUT(heap_listp + (3 * WSIZE), PACK(0, 1));     /* Epilogue header */
-	heap_listp += (2 * WSIZE);
-
+	/* Create the initial empty heap, one for each PUT*/
+	if ((heap_listp = mem_sbrk(3 * WSIZE)) == (void *)-1)
+		return (-1);
+	/* Initialize the array of free list*/
+	unsigned int i;	
+	for (i = 0; i < MAX_SIZE; i++) {
+		init_head(&free_listp[i]);
+	}
+	// PUT(heap_listp, PACK(DSIZE, 1));                            /* Alignment padding */
+	PUT(heap_listp, PACK(DSIZE, 1)); /* Prologue header */ 
+	PUT(heap_listp + (1 * WSIZE), PACK(DSIZE, 1)); /* Prologue footer */ 
+	PUT(heap_listp + (2 * WSIZE), PACK(0, 1));     /* Epilogue header */
+	heap_listp += WSIZE;
+	
+	/* Block ptr bp. */
+	void *bp;
 	/* Extend the empty heap with a free block of CHUNKSIZE bytes. */
-	if (extend_heap(CHUNKSIZE / WSIZE) == NULL)
+	if ((bp = extend_heap(CHUNKSIZE / WSIZE)) == NULL)
 		return (-1);
 	return (0);
 }
@@ -129,7 +152,7 @@ mm_malloc(size_t size)
 	if (size <= DSIZE)
 		asize = 2 * DSIZE;
 	else
-		asize = DSIZE * ((size + DSIZE + (DSIZE - 1)) / DSIZE);
+		asize = ALIGN_SIZE * ((size + DSIZE + (ALIGN_SIZE - 1)) / ALIGN_SIZE);
 
 	/* Search the free list for a fit. */
 	if ((bp = find_fit(asize)) != NULL) {
@@ -186,6 +209,14 @@ mm_realloc(void *ptr, size_t size)
 {
 	size_t oldsize;
 	void *newptr;
+	size_t newsize;
+
+	/* Adjust block size to include overhead and alignment reqs. */
+	if (size <= DSIZE)
+		newsize = 2 * DSIZE;
+	else
+		newsize = ALIGN_SIZE * ((size + DSIZE + (ALIGN_SIZE - 1)) / ALIGN_SIZE);
+	oldsize = GET_SIZE(HDRP(ptr));
 
 	/* If size == 0 then this is just free, and we return NULL. */
 	if (size == 0) {
@@ -196,17 +227,20 @@ mm_realloc(void *ptr, size_t size)
 	/* If oldptr is NULL, then this is just malloc. */
 	if (ptr == NULL)
 		return (mm_malloc(size));
+	/* Copy the old data. */
+	if (newsize < oldsize)
+		return (ptr);
 
-	newptr = mm_malloc(size);
+	newptr = mm_malloc(2 * size);
 
 	/* If realloc() fails, the original block is left untouched.  */
 	if (newptr == NULL)
 		return (NULL);
 
-	/* Copy just the old data, not the old header and footer. */
-	oldsize = GET_SIZE(HDRP(ptr)) - DSIZE;
-	if (size < oldsize)
-		oldsize = size;
+	// /* Copy just the old data, not the old header and footer. */
+	// oldsize = GET_SIZE(HDRP(ptr)) - DSIZE;
+	// if (size < oldsize)
+	// 	oldsize = size;
 	memcpy(newptr, ptr, oldsize);
 
 	/* Free the old block. */
@@ -410,4 +444,10 @@ printblock(void *bp)
 	printf("%p: header: [%zu:%c] footer: [%zu:%c]\n", bp, 
 	    hsize, (halloc ? 'a' : 'f'), 
 	    fsize, (falloc ? 'a' : 'f'));
+}
+static void
+init_head(struct seg_list *dummy)
+{
+	dummy->next = dummy;
+	dummy->prev = dummy;
 }
