@@ -105,14 +105,14 @@ int
 mm_init(void) 
 {
 	/* Initialize memory for storing the free list in the heap. */
-	if ((seg_first = mem_sbrk(2 * SEGSIZE * sizeof(void *))) == (void *)-1)
+	if ((seg_first = mem_sbrk(2 * SEGSIZE * sizeof(void*))) == (void *)-1)
 		return (-1);
 
 	/* Initialize the array of free list to NUL. L*/
 	int i;	
 	for (i = 0; i < SEGSIZE; i++) {
-		seg_first[i].next_list = NULL;
-		seg_first[i].prev_list = NULL;
+		seg_first[i].next_list = &seg_first[i];
+		seg_first[i].prev_list = &seg_first[i];
 	}
 
 	/* Create the start of the heap_list for free list. */
@@ -153,7 +153,6 @@ mm_malloc(size_t size)
 	if (size == 0)
 		return (NULL);
 
-	
 	/* Adjust block size to include overhead and alignment reqs. */
 	if (size <= DSIZE)
 		asize = 2 * DSIZE;
@@ -271,10 +270,7 @@ coalesce(void *bp)
 	bool next_alloc = GET_ALLOC(HDRP(NEXT_BLKP(bp)));
 
 	if (prev_alloc && next_alloc) {                 /* Case 1 */
-		
-		struct block_list *new_block = (struct block_list*) bp;
-		list_insert(new_block, size);
-		return (bp);
+		bp = bp;
 
 	} else if (prev_alloc && !next_alloc) {         /* Case 2 */
 		size += GET_SIZE(HDRP(NEXT_BLKP(bp)));
@@ -345,18 +341,26 @@ extend_heap(size_t words)
 static void *
 find_fit(size_t asize)
 {
-	void *bp;
+	// void *bp;
 	
-	for (int i = seg_index(asize); i < SEGSIZE; i++) {
+	// for (int i = seg_index(asize); i < SEGSIZE; i++) {
 
-		/* return best fit among first 5 fits in the same bucket */
-		for (bp = seg_first[i].next_list; bp != NULL; bp = NEXT_BLKP(bp)){
-			if (asize <= GET_SIZE(HDRP(bp))) {
-				return (bp);
-			}
-		}
+	// 	/* return best fit among first 5 fits in the same bucket */
+	// 	for (bp = seg_first[i].next_list; bp != NULL; bp = NEXT_BLKP(bp)){
+	// 		if (asize <= GET_SIZE(HDRP(bp))) {
+	// 			return (bp);
+	// 		}
+	// 	}
+	// }
+	void *bp;
+
+	/* Search for the first fit. */
+	for (bp = heap_listp; GET_SIZE(HDRP(bp)) > 0; bp = NEXT_BLKP(bp)) {
+		if (!GET_ALLOC(HDRP(bp)) && asize <= GET_SIZE(HDRP(bp)))
+			return (bp);
 	}
-    	return (NULL);
+	/* No fit was found. */
+	return (NULL);
 }
 
 /* 
