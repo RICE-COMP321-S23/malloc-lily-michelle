@@ -41,7 +41,8 @@ team_t team = {
 /* Basic constants and macros: */
 #define WSIZE      sizeof(void *) /* Word and header/footer size (bytes) */
 #define DSIZE      (2 * WSIZE)    /* Doubleword size (bytes) */
-#define ALIGN_SIZE 8		 /* Alignment size */
+#define ALIGN_SIZE 8		  /* Alignment size */
+#define SEGSIZE    10             /* Free list segregation */
 #define CHUNKSIZE  (1 << 12)      /* Extend heap by this amount (bytes) */
 
 #define MAX(x, y)  ((x) > (y) ? (x) : (y))  
@@ -65,10 +66,18 @@ team_t team = {
 #define NEXT_BLKP(bp)  ((char *)(bp) + GET_SIZE(((char *)(bp) - WSIZE)))
 #define PREV_BLKP(bp)  ((char *)(bp) - GET_SIZE(((char *)(bp) - DSIZE)))
 
+/* Struct for segregated free list*/
+struct block_list
+{
+	struct block_list *next_list; /* Pointer to next block list */
+	struct block_list *prev_list; /* Pointer to previous block list */
+};
+
 /* Global variables: */
 static char *heap_listp; /* Pointer to first block. */  
+
 /* Pointer to first block_list of free list. */
-static struct block_list **free_list_segregatedp; 
+struct block_list *seg_first; 
 
 /* Function prototypes for internal helper routines: */
 static void *coalesce(void *bp);
@@ -76,25 +85,14 @@ static void *extend_heap(size_t words);
 static void *find_fit(size_t asize);
 static void place(void *bp, size_t asize);
 
-// /* Pointer to first free element of each free list*/
-// static struct seg_list *free_listp;
 /* Function prototypes for heap consistency checker routines: */
 static void checkblock(void *bp);
 static void checkheap(bool verbose);
 static void printblock(void *bp); 
-/* Helper functions */
-static int freelist_idx(size_t size);
-static struct block_list *remove_free(void* blockp);
-static void add_to_free(void* bp, int index);
-/* Struct for segregated free list*/
-struct block_list
-{
-	struct block_list *next_list; /* Pointer to next block list */
-	struct block_list *prev_list; /* Pointer to previous block list */
-};
-// unsigned int MAX_SIZE;
-// static void init_head(struct seg_list *dummy);
 
+static void list_remove(struct block_list *bp);
+static void list_insert(struct block_list *bp, size_t size);
+static int seg_index(size_t size);
 /* 
  * Requires:
  *   None.
@@ -107,14 +105,14 @@ int
 mm_init(void) 
 {
 	/* Initialize memory for storing the free list in the heap. */
-	if ((free_list_segregatedp = mem_sbrk(2 * 12 * sizeof(void *))) == 
-		(void *)-1)
+	if ((seg_first = mem_sbrk(2 * SEGSIZE * sizeof(void *))) == (void *)-1)
 		return (-1);
 
 	/* Initialize the array of free list to NUL. L*/
 	int i;	
-	for (i = 0; i < 12; i++) {
-		free_list_segregatedp[i] = NULL;
+	for (i = 0; i < SEGSIZE; i++) {
+		seg_first[i].next_list = NULL;
+		seg_first[i].prev_list = NULL;
 	}
 
 	/* Create the start of the heap_list for free list. */
@@ -131,8 +129,7 @@ mm_init(void)
 	void *bp = extend_heap(CHUNKSIZE / WSIZE);
 	if (bp == NULL)
 		return (-1);
-	// Add to free list.
-	add_to_free(bp, freelist_idx(GET_SIZE(HDRP(bp))));
+
 	return (0);
 }
 
@@ -149,29 +146,29 @@ void *
 mm_malloc(size_t size) 
 {
 	size_t asize;      /* Adjusted block size */
-	// size_t extendsize; /* Amount to extend heap if no fit */
+	size_t extendsize; /* Amount to extend heap if no fit */
 	void *bp;
 
 	/* Ignore spurious requests. */
 	if (size == 0)
 		return (NULL);
 
+	
 	/* Adjust block size to include overhead and alignment reqs. */
 	if (size <= DSIZE)
 		asize = 2 * DSIZE;
 	else
-		asize = DSIZE * ((size + DSIZE + (DSIZE - 1)) / DSIZE);
+		asize = ALIGN_SIZE * ((size + DSIZE + (ALIGN_SIZE - 1)) / ALIGN_SIZE);
 
 	/* Search the free list for a fit. */
-	bp = find_fit(asize);
-	if (bp != NULL) {
+	if ((bp = find_fit(asize)) != NULL) {
 		place(bp, asize);
 		return (bp);
 	}
 
 	/* No fit found.  Get more memory and place the block. */
-	
-	if ((bp = extend_heap(asize / WSIZE)) == NULL)  
+	extendsize = MAX(asize, CHUNKSIZE);
+	if ((bp = extend_heap(extendsize / WSIZE)) == NULL)  
 		return (NULL);
 	place(bp, asize);
 	return (bp);
@@ -216,7 +213,7 @@ mm_free(void *bp)
 void *
 mm_realloc(void *ptr, size_t size)
 {
-	size_t oldsize;
+	size_t oldsize, asize;
 	void *newptr;
 
 	/* If size == 0 then this is just free, and we return NULL. */
@@ -228,17 +225,13 @@ mm_realloc(void *ptr, size_t size)
 	/* If oldptr is NULL, then this is just malloc. */
 	if (ptr == NULL)
 		return (mm_malloc(size));
-	/* Check if we can coalesce the next block into current one s.t.
-	 * we do not have to copy memory, and can just return the same pointer 
-	 * after coalescing.
-	 */
-	oldsize = GET_SIZE(HDRP(ptr));
-	size_t nextsize = GET_SIZE(HDRP(NEXT_BLKP(ptr)));
-	if (oldsize + nextsize > size && !GET_ALLOC(HDRP(NEXT_BLKP(ptr)))) {
-		oldsize += nextsize;
-		remove_free(NEXT_BLKP(ptr));
-		PUT(HDRP(ptr), PACK(oldsize, 1));
-		PUT(FTRP(ptr), PACK(oldsize, 1));
+	
+	oldsize = GET_SIZE(HDRP(ptr)) - DSIZE;
+	if (size <= DSIZE)
+		asize = 2 * DSIZE;
+	else
+		asize = ALIGN_SIZE * ((size + DSIZE + (ALIGN_SIZE - 1)) / ALIGN_SIZE);
+	if (asize < oldsize + DSIZE){
 		return (ptr);
 	}
 	newptr = mm_malloc(size);
@@ -276,27 +269,41 @@ coalesce(void *bp)
 	size_t size = GET_SIZE(HDRP(bp));
 	bool prev_alloc = GET_ALLOC(FTRP(PREV_BLKP(bp)));
 	bool next_alloc = GET_ALLOC(HDRP(NEXT_BLKP(bp)));
-	void *temp_bp;
 
 	if (prev_alloc && next_alloc) {                 /* Case 1 */
 		
+		struct block_list *new_block = (struct block_list*) bp;
+		list_insert(new_block, size);
 		return (bp);
+
 	} else if (prev_alloc && !next_alloc) {         /* Case 2 */
 		size += GET_SIZE(HDRP(NEXT_BLKP(bp)));
+
+		list_remove((struct block_list *)NEXT_BLKP(bp));
+
 		PUT(HDRP(bp), PACK(size, 0));
 		PUT(FTRP(bp), PACK(size, 0));
 	} else if (!prev_alloc && next_alloc) {         /* Case 3 */
 		size += GET_SIZE(HDRP(PREV_BLKP(bp)));
+
+		list_remove((struct block_list *)PREV_BLKP(bp));
+
 		PUT(FTRP(bp), PACK(size, 0));
 		PUT(HDRP(PREV_BLKP(bp)), PACK(size, 0));
 		bp = PREV_BLKP(bp);
 	} else {                                        /* Case 4 */
 		size += GET_SIZE(HDRP(PREV_BLKP(bp))) + 
 		    GET_SIZE(FTRP(NEXT_BLKP(bp)));
+
+		list_remove((struct block_list *)PREV_BLKP(bp));
+		list_remove((struct block_list *)NEXT_BLKP(bp));
+
 		PUT(HDRP(PREV_BLKP(bp)), PACK(size, 0));
 		PUT(FTRP(NEXT_BLKP(bp)), PACK(size, 0));
 		bp = PREV_BLKP(bp);
 	}
+	struct block_list *new_block = (struct block_list*) bp;
+	list_insert(new_block, size);
 	return (bp);
 }
 
@@ -339,14 +346,17 @@ static void *
 find_fit(size_t asize)
 {
 	void *bp;
+	
+	for (int i = seg_index(asize); i < SEGSIZE; i++) {
 
-	/* Search for the first fit. */
-	for (bp = heap_listp; GET_SIZE(HDRP(bp)) > 0; bp = NEXT_BLKP(bp)) {
-		if (!GET_ALLOC(HDRP(bp)) && asize <= GET_SIZE(HDRP(bp)))
-			return (bp);
+		/* return best fit among first 5 fits in the same bucket */
+		for (bp = seg_first[i].next_list; bp != NULL; bp = NEXT_BLKP(bp)){
+			if (asize <= GET_SIZE(HDRP(bp))) {
+				return (bp);
+			}
+		}
 	}
-	/* No fit was found. */
-	return (NULL);
+    	return (NULL);
 }
 
 /* 
@@ -362,13 +372,14 @@ static void
 place(void *bp, size_t asize)
 {
 	size_t csize = GET_SIZE(HDRP(bp));   
-
+	list_remove(bp);
 	if ((csize - asize) >= (2 * DSIZE)) { 
 		PUT(HDRP(bp), PACK(asize, 1));
 		PUT(FTRP(bp), PACK(asize, 1));
 		bp = NEXT_BLKP(bp);
 		PUT(HDRP(bp), PACK(csize - asize, 0));
 		PUT(FTRP(bp), PACK(csize - asize, 0));
+		list_insert(bp, csize - asize);
 	} else {
 		PUT(HDRP(bp), PACK(csize, 1));
 		PUT(FTRP(bp), PACK(csize, 1));
@@ -390,7 +401,7 @@ static void
 checkblock(void *bp) 
 {
 
-	if ((uintptr_t)bp % DSIZE)
+	if ((uintptr_t)bp % ALIGN_SIZE)
 		printf("Error: %p is not doubleword aligned\n", bp);
 	if (GET(HDRP(bp)) != GET(FTRP(bp)))
 		printf("Error: header does not match footer\n");
@@ -457,3 +468,48 @@ printblock(void *bp)
 	    fsize, (falloc ? 'a' : 'f'));
 }
 
+static int 
+seg_index(size_t size) 
+{
+	if (size <= 32) 			
+		return 0;
+	else if (size <= 64) 	
+		return 1;
+	else if (size <= 128) 	
+		return 2;
+	else if (size <= 256) 	
+		return 3;
+	else if (size <= 512) 	
+		return 4;
+	else if (size <= 1024) 	
+		return 5;
+	else if (size <= 2048) 	
+		return 6;
+	else if (size <= 4096) 	
+		return 7;
+	else if (size <= 8192) 	
+		return 8;
+	else  						
+		return 9;
+}
+
+static void
+list_insert(struct block_list *bp, size_t size)
+{
+	struct block_list *start = &seg_first[seg_index(size)];
+	struct block_list *new_after = start->next_list;
+	bp->prev_list = start;
+	bp->next_list = new_after;
+	new_after->prev_list = bp;
+	start->next_list = bp;
+}
+
+static void
+list_remove(struct block_list *bp)
+{
+	struct block_list *new_prev = bp->prev_list;
+	struct block_list *new_next = bp->next_list;
+	new_prev->next_list = new_next;
+	new_next->prev_list = new_prev;
+	
+}
