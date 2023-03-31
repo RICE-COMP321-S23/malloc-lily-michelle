@@ -426,20 +426,19 @@ checkblock(void *bp)
 	int index = seg_index(GET_SIZE(HDRP(bp)));
 	struct block_list *i = seg_first;
 	if (!GET_ALLOC(HDRP(bp))) {
-		/* Check if free blocks are in the correct free list */
+		/* Check if free blocks are in the correct free list. */
 		while (i != NULL) {
 			if (i == bp) {
 				printf("Found %p in free list index %u\n", 
-					bp, index);
+				    bp, index);
 				return;
 			}
 			i = i->next_list;
 		}
-		printf("Error: %p not in free ist at index %u at size %zu \n"
-			, bp,
-			index, GET_SIZE(HDRP(bp)));
+		printf("Error: %p not in free ist at index %u at size %zu \n", 
+		    bp, index, GET_SIZE(HDRP(bp)));
 	} else {
-		/* Check that non free blocks aren't in any free lists */
+		/* Check that non free blocks aren't in any free lists. */
 		while (i != NULL) {
 			if (i == bp) {
 				printf("Found non-free block %p", bp);
@@ -476,31 +475,30 @@ checkheap(bool verbose)
     	halloc = GET_ALLOC(HDRP(bp));
     	fsize = GET_SIZE(FTRP(bp));
     	falloc = GET_ALLOC(FTRP(bp));
+
 	while (start != next) {
-		if (GET_ALLOC(current) && !GET_ALLOC(next)) {
+		if (GET_ALLOC(current) && !GET_ALLOC(next)) 
 			printf("Ajacent blocks are free and uncoalesced! \n");
-		}
 		current = next;
 		next = NEXT_BLKP(next);
 	}
 
-	/* Checks if the header and footer of a block given as input is 
-		consistent.
-	   Runs silently unless there is a mismatch between header and footer.
-	*/
-    	if(hsize!=fsize ||(falloc!=halloc)) {
-
-        	printf("\n Inconsistent header & footer. Recheck block %p\n"
-			,bp);
-	}
-
+	/* 
+	 * Checks if the header and footer of a block given as input is 
+	 * consistent. Runs silently unless there is a mismatch between 
+	 * header and footer.
+	 */
+    	if(hsize!=fsize ||(falloc!=halloc))
+        	printf("\n Inconsistent header & footer. Recheck block %p\n",
+		    bp);
+	
 	if (verbose) {
 		printf("\n----New Checkheap----\n");
 		printf("Heap (%p):\n", heap_listp);
 	}
 
 	// Check prologue.
-	if (GET_SIZE(HDRP(heap_listp)) != DSIZE ||
+	if (GET_SIZE(HDRP(heap_listp)) != DSIZE || 
 	    !GET_ALLOC(HDRP(heap_listp)))
 		printf("Bad prologue header!\n");
 	checkblock(heap_listp);
@@ -518,19 +516,20 @@ checkheap(bool verbose)
 		checkblock(bp);
 	}
 
-	// Check if every free block actually in the free list.
-	// Print entire free list.
+	/*
+	 * Check if every free block actually in the free list.
+	 * Print entire free list.
+	 */ 
 	if (verbose) {
 		struct block_list *head = seg_first;
 		for (struct block_list *head = seg_first; 
-		head != NULL; head = head->next_list) {
+		    head != NULL; head = head->next_list) {
 			printf("Mistake here on %p", head);
 			return;
 		}
 		printf("Block %p in free list index", head);
 		printf(" %zu with allocation",GET_SIZE(HDRP(head)));
 		printf(" %c\n", GET_ALLOC(HDRP(head)) ? 'a' : 'f');
-		
 	}
 }
 
