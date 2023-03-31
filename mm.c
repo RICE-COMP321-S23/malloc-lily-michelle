@@ -76,7 +76,7 @@ struct block_list
 /* Global variables: */
 static char *heap_listp; /* Pointer to first block. */  
 
-/* Pointer to first block_list of free list. */
+/* Pointer to first free block. */
 struct block_list *seg_first; 
 
 /* Function prototypes for internal helper routines: */
@@ -444,9 +444,8 @@ checkblock(void *bp)
 				printf("Found non-free block %p", bp);
 				return;
 			}
-			if (i == NULL || i->next_list == NULL) {
+			if (i == NULL || i->next_list == NULL) 
 				break;
-			}
 			i = i->next_list;
 		}
 	}
@@ -576,25 +575,25 @@ seg_index(size_t size)
 {
 	/* Depending on size, locate index 0-9. */
 	if (size <= 32) 			
-		return 0;
+		return (0);
 	else if (size <= 64) 	
-		return 1;
+		return (1);
 	else if (size <= 128) 	
-		return 2;
+		return (2);
 	else if (size <= 256) 	
-		return 3;
+		return (3);
 	else if (size <= 512) 	
-		return 4;
+		return (4);
 	else if (size <= 1024) 	
-		return 5;
+		return (5);
 	else if (size <= 2048) 	
-		return 6;
+		return (6);
 	else if (size <= 4096) 	
-		return 7;
+		return (7);
 	else if (size <= 8192) 	
-		return 8;
+		return (8);
 	else  						
-		return 9;
+		return (9);
 	
 }
 
