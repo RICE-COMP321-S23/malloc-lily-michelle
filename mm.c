@@ -18,6 +18,7 @@
 #include <stdio.h>
 #include <string.h>
 
+
 #include "memlib.h"
 #include "mm.h"
 
@@ -90,6 +91,7 @@ static void checkblock(void *bp);
 static void checkheap(bool verbose);
 static void printblock(void *bp); 
 
+/* Helper functions for list modification: */
 static void list_remove(struct block_list *bp);
 static void list_insert(struct block_list *bp, size_t size);
 static int seg_index(size_t size);
@@ -230,10 +232,11 @@ mm_realloc(void *ptr, size_t size)
 		asize = 2 * DSIZE;
 	else
 		asize = ALIGN_SIZE * ((size + DSIZE + (ALIGN_SIZE - 1)) / ALIGN_SIZE);
-	if (asize < oldsize + DSIZE){
+	
+	if (asize < oldsize + DSIZE) {
 		return (ptr);
 	}
-	newptr = mm_malloc(size);
+	newptr = mm_malloc(SEGSIZE * size);
 
 	/* If realloc() fails, the original block is left untouched.  */
 	if (newptr == NULL)
@@ -271,7 +274,6 @@ coalesce(void *bp)
 
 	if (prev_alloc && next_alloc) {                 /* Case 1 */
 		bp = bp;
-
 	} else if (prev_alloc && !next_alloc) {         /* Case 2 */
 		size += GET_SIZE(HDRP(NEXT_BLKP(bp)));
 
@@ -341,26 +343,19 @@ extend_heap(size_t words)
 static void *
 find_fit(size_t asize)
 {
-	// void *bp;
-	
-	// for (int i = seg_index(asize); i < SEGSIZE; i++) {
+	struct block_list *bp; 
 
-	// 	/* return best fit among first 5 fits in the same bucket */
-	// 	for (bp = seg_first[i].next_list; bp != NULL; bp = NEXT_BLKP(bp)){
-	// 		if (asize <= GET_SIZE(HDRP(bp))) {
-	// 			return (bp);
-	// 		}
-	// 	}
-	// }
-	void *bp;
-
-	/* Search for the first fit. */
-	for (bp = heap_listp; GET_SIZE(HDRP(bp)) > 0; bp = NEXT_BLKP(bp)) {
-		if (!GET_ALLOC(HDRP(bp)) && asize <= GET_SIZE(HDRP(bp)))
-			return (bp);
+	for (int i = seg_index(asize); i < SEGSIZE; i++) {
+		
+		for (bp = seg_first[i].next_list; bp && bp != &seg_first[i]; bp = bp -> next_list) {
+			if (asize <= GET_SIZE(HDRP(bp))){
+				return (void*)bp;
+			}
+		}
 	}
 	/* No fit was found. */
 	return (NULL);
+	
 }
 
 /* 
@@ -472,7 +467,7 @@ printblock(void *bp)
 	    fsize, (falloc ? 'a' : 'f'));
 }
 
-static int 
+inline static int 
 seg_index(size_t size) 
 {
 	if (size <= 32) 			
@@ -495,9 +490,10 @@ seg_index(size_t size)
 		return 8;
 	else  						
 		return 9;
+	
 }
 
-static void
+inline static void
 list_insert(struct block_list *bp, size_t size)
 {
 	struct block_list *start = &seg_first[seg_index(size)];
@@ -508,7 +504,7 @@ list_insert(struct block_list *bp, size_t size)
 	start->next_list = bp;
 }
 
-static void
+inline static void
 list_remove(struct block_list *bp)
 {
 	struct block_list *new_prev = bp->prev_list;
