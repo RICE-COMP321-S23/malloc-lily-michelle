@@ -66,7 +66,7 @@ team_t team = {
 #define NEXT_BLKP(bp)  ((char *)(bp) + GET_SIZE(((char *)(bp) - WSIZE)))
 #define PREV_BLKP(bp)  ((char *)(bp) - GET_SIZE(((char *)(bp) - DSIZE)))
 
-/* Struct for segregated free list*/
+/* Struct for segregated free list. */
 struct block_list
 {
 	struct block_list *next_list; /* Pointer to next block list */
@@ -279,7 +279,7 @@ coalesce(void *bp)
 	bool next_alloc = GET_ALLOC(HDRP(NEXT_BLKP(bp)));
 
 	if (prev_alloc && next_alloc) {                 /* Case 1 */
-		/* Bp stays same */
+		/* Bp stays same. */
 		bp = bp;	
 	} else if (prev_alloc && !next_alloc) {         /* Case 2 */
 		size += GET_SIZE(HDRP(NEXT_BLKP(bp)));
