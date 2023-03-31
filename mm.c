@@ -413,14 +413,17 @@ checkblock(void *bp)
 		/* Check if free blocks are in the correct free list */
 		while (i != NULL) {
 			if (i == bp) {
-				printf("Found %p in free list index %u\n", bp, index);
+				printf("Found %p in free list index %u\n", 
+					bp, index);
 				return;
 			}
 			i = i->next_list;
 		}
-		printf("Error: %p not in free list at index %u with size %zu \n", bp,
-			index, GET_SIZE(HDRP(bp)));
-	} else {
+		printf(
+			"Error: %p not in freelist at index %u with size %zu\n"
+				, bp, index, GET_SIZE(HDRP(bp)));
+
+		} else {
 		/* Check that non free blocks aren't in any free lists */
 		while (i != NULL) {
 			if (i == bp) {
@@ -460,18 +463,21 @@ checkheap(bool verbose)
     	falloc = GET_ALLOC(FTRP(bp));
 	while (start != next) {
 		if (GET_ALLOC(current) && !GET_ALLOC(next)) {
-			printf("Ajacent blocks are free and uncoalesced! \n");
+			printf("Ajacent blocks are free and uncoalesced!\n");
 		}
 		current = next;
 		next = NEXT_BLKP(next);
 	}
 
-	/* Checks if the header and footer of a block given as input is consistent.
+	/* Checks if the header and footer of a block given as input is 
+		consistent.
 	   Runs silently unless there is a mismatch between header and footer.
 	*/
     	if(hsize!=fsize ||(falloc!=halloc)) {
 
-        	printf("\n Inconsistent header and footer. Recheck block %p\n",bp);
+        	printf(
+			"\n Inconsistent header and footer. Recheck block %p\n"
+				,bp);
 	}
 
 	if (verbose) {
