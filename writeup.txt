@@ -5,7 +5,28 @@ COMP 321 Project 5: Malloc
 
 DESIGN DESCRIPTION
 
-<Replace with an English description of your submission's design.> 
+<
+Our allocator follows Method 3 to use "segregated free list" to keep track of 
+free blocks. We used segregated free list in conjunction with linked list. We 
+wrote struct "block_list" following the concept of doubly linked list, storing
+its previous "block_list" and next "block_list". If we want to insert a free 
+block, we will insert the free block at the beginning of the block list; and if
+we want to remove a free block, we will locate the block and remove it. 
+Insertion and removal are all similar to the procedure of doubly linked list.
+The placement policy we used is first fit, and it is enforced by the function
+"find_fit". find_fit searches block list from beginning, accesses each 
+"block_list" in the doubly linked list, and choose first free block that fits.
+Our allocator splits when after we place a block with a given size at the start
+of a free block, the remainder's size is at least the minimum block size. Our 
+allocator coalesces following the immediate coalescing policy: coalesce 
+adjacent blocks each time free is called. If the block's previous block is 
+freed, the block coalesces with previous block; if the block's next block is
+freed, the block coalesces with next block; and if the block's previous and 
+next block is freed, the block coalesces with both the previous and next block.
+Our allocator's insertion policy for free blocks is LIFO (last-in-first-out),
+insert freed block at the beginning of the free list, giving us simple and 
+constant time insertion.
+>
 
 checkheap() DESCRIPTION
 
