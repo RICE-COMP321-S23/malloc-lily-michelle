@@ -1,5 +1,5 @@
 COMP 321 Project 5: Malloc
-<Replace with your name(s) and NetID(s).>
+<Michelle Pang, yp29; Lily Gao, qg8>
 
 ---(Do not write lines of text that exceed the width of this line.)------------
 
@@ -9,5 +9,32 @@ DESIGN DESCRIPTION
 
 checkheap() DESCRIPTION
 
-<Replace with an English description of your submission's heap consistency
- checker.>
+<
+Firstly, we implemented checkblock() to ensure that given a pointer to a block
+in memory, in addition to checking if the pointer is doubleword aligned and 
+if the header matches with footer, we can also check if the block was free or 
+not. 
+If the block was free, then it would go to the proper segregated free list 
+that we found using seg_index(), and iterate through every block until it 
+eiter found the block in the free list or print a message to warn that the 
+specific block was free but is not in the free list. If the block was not free, 
+it would still go to the proper segregated free list and we check to see if the 
+block was mistakenly put in the free list. If we find such block, we print 
+an error message to warn. 
+
+In checkheap, we check every block in the heap by using checkblock. Then, if 
+the input, verbose, if true, then we use a nested for-loop, in which the 
+outer loop iterate through 0 to SEGSIZE and the inner loop iterate over each
+block in the corresponding free list and print each one out, to print out the 
+entire segregated free list. 
+We also checked if any contiguous free blocks that somehow escaped coalescing 
+by using a while loop with an if statement nested in it, in which iterate 
+every heap list pointer and speficies that while it is not equal to its next 
+pointer, and if the current heap list pointer is allocated but its next is not,
+we print "Ajacent blocks are free and uncoalesced!" to warn. 
+Next, we checked if the header and footer of a block given as input is 
+consistent, which runs silently unless there is a mismatch between header 
+and footer.
+>
+
+

@@ -464,7 +464,6 @@ void
 checkheap(bool verbose) 
 {	
 	void *bp;
-	// Check if any contiguous free blocks that somehow escaped coalescing.
 	char* current;
 	char* next;
         char* start;
@@ -476,6 +475,8 @@ checkheap(bool verbose)
     	halloc = GET_ALLOC(HDRP(bp));
     	fsize = GET_SIZE(FTRP(bp));
     	falloc = GET_ALLOC(FTRP(bp));
+
+	// Check if any contiguous free blocks that somehow escaped coalescing.
 	while (start != next) {
 		if (GET_ALLOC(current) && !GET_ALLOC(next)) {
 			printf("Ajacent blocks are free and uncoalesced! \n");
@@ -521,17 +522,19 @@ checkheap(bool verbose)
 	// Check if every free block actually in the free list.
 	// Print entire free list.
 	if (verbose) {
-		struct block_list *head = seg_first;
-		for (struct block_list *head = seg_first; 
-		head != NULL; head = head->next_list) {
-			printf("Mistake here on %p", head);
-			return;
+		for (int i = 0; i < SEGSIZE; i++) {
+			for (struct block_list *head = seg_first; 
+			head != NULL; head = head->next_list) {
+				printf("Mistake here on %p", head);
+				return;
 		}
-		printf("Block %p in free list index", head);
-		printf(" %zu with allocation",GET_SIZE(HDRP(head)));
-		printf(" %c\n", GET_ALLOC(HDRP(head)) ? 'a' : 'f');
-		
+		printf("Block %p in free list index", seg_first);
+		printf(" %zu with allocation",GET_SIZE(HDRP(seg_first)));
+		printf(" %c\n", GET_ALLOC(HDRP(seg_first)) ? 'a' : 'f');
+
+		}
 	}
+		
 }
 
 /*
