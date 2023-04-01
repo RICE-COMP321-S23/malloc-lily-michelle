@@ -478,7 +478,7 @@ checkheap(bool verbose)
 
 	while (start != next) {
 		if (GET_ALLOC(current) && !GET_ALLOC(next)) 
-			printf("Ajacent blocks are free and uncoalesced! \n");
+			printf("Adjacent blocks are free and uncoalesced! \n");
 		current = next;
 		next = NEXT_BLKP(next);
 	}
